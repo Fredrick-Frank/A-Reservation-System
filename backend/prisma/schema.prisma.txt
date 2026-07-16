@@ -1,0 +1,57 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String
+  reservations Reservation[]
+}
+
+model Space {
+  id           String        @id @default(uuid())
+  name         String        
+  type         String        
+  capacity     Int
+  pricePerHour Decimal       @default(0.00)
+  reservations Reservation[]
+}
+
+model MenuItem {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal
+  category    String         
+  orderItems  PreorderedFood[]
+}
+
+model Reservation {
+  id            String           @id @default(uuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+  spaceId       String
+  space         Space            @relation(fields: [spaceId], references: [id])
+  date          DateTime         
+  startTime     String           
+  endTime       String           
+  guestCount    Int
+  status        String           @default("confirmed") 
+  preorderItems PreorderedFood[]
+  createdAt     DateTime         @default(now())
+}
+
+model PreorderedFood {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  menuItemId    String
+  menuItem      MenuItem    @relation(fields: [menuItemId], references: [id])
+  quantity      Int
+}
