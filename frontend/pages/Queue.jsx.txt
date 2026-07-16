@@ -1,0 +1,177 @@
+import React, { useState } from 'react';
+import { useAuth } from '@/lib/AuthContext';
+import CheckoutModal from '@/components/CheckoutModal';
+
+export default function Queue() {
+  const { user } = useAuth();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const [dateTime, setDateTime] = useState({ date: '', startTime: '', endTime: '', guestCount: 2 });
+  const [availableSpaces, setAvailableSpaces] = useState([]);
+  const [selectedSpace, setSelectedSpace] = useState(null);
+  const [menuItems, setMenuItems] = useState([]);
+  const [cart, setCart] = useState({});
+
+  const checkAvailability = async () => {
+    if (!dateTime.date || !dateTime.startTime || !dateTime.endTime) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/spaces/availability?date=${dateTime.date}&startTime=${dateTime.startTime}&endTime=${dateTime.endTime}`);
+      const data = await res.json();
+      setAvailableSpaces(data);
+      setStep(2);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMenu = async () => {
+    if (menuItems.length > 0) { setStep(3); return; }
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/menu');
+      const data = await res.json();
+      setMenuItems(data);
+      setStep(3);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCartChange = (itemId, change) => {
+    setCart(prev => {
+      const currentQty = prev[itemId] || 0;
+      const newQty = Math.max(0, currentQty + change);
+      if (newQty === 0) {
+        const { [itemId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [itemId]: newQty };
+    });
+  };
+
+  const getReservationDetails = () => {
+    const foodPreorder = Object.entries(cart).map(([menuItemId, quantity]) => ({
+      menuItemId,
+      quantity
+    }));
+    return {
+      userId: user?.id || "anonymous-guest-id",
+      spaceId: selectedSpace?.id,
+      date: dateTime.date,
+      startTime: dateTime.startTime,
+      endTime: dateTime.endTime,
+      guestCount: parseInt(dateTime.guestCount),
+      foodPreorder
+    };
+  };
+
+  if (success) {
+    return (
+      <div className="max-w-xl mx-auto my-24 p-8 border border-neutral-800 bg-[#0E0E10] text-center space-y-4">
+        <h2 className="font-serif text-3xl text-orange-600">Seat Confirmed</h2>
+        <p className="text-sm font-mono text-neutral-400">Your layout, timing sequence, and preorder profile have been committed.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl mx-auto my-12 p-8 border border-neutral-900 bg-[#0E0E10]">
+      <h1 className="font-serif text-3xl text-neutral-100 mb-6">Sequence Registration</h1>
+
+      <div className="flex gap-4 font-mono text-[10px] uppercase tracking-wider text-neutral-600 mb-8 border-b border-neutral-900 pb-4">
+        <span className={step >= 1 ? "text-orange-600" : ""}>01. Timing</span>
+        <span className={step >= 2 ? "text-orange-600" : ""}>02. Layout</span>
+        <span className={step >= 3 ? "text-orange-600" : ""}>03. Profile</span>
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-mono uppercase text-neutral-500 mb-2">Sequence Date</label>
+            <input type="date" className="w-full bg-neutral-900 border border-neutral-800 p-3 font-mono text-sm text-neutral-200" value={dateTime.date} onChange={e => setDateTime({ ...dateTime, date: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-mono uppercase text-neutral-500 mb-2">Window Start</label>
+              <input type="time" className="w-full bg-neutral-900 border border-neutral-800 p-3 font-mono text-sm text-neutral-200" value={dateTime.startTime} onChange={e => setDateTime({ ...dateTime, startTime: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono uppercase text-neutral-500 mb-2">Window End</label>
+              <input type="time" className="w-full bg-neutral-900 border border-neutral-800 p-3 font-mono text-sm text-neutral-200" value={dateTime.endTime} onChange={e => setDateTime({ ...dateTime, endTime: e.target.value })} />
+            </div>
+          </div>
+          <button disabled={!dateTime.date || !dateTime.startTime || !dateTime.endTime || loading} onClick={checkAvailability} className="w-full bg-orange-600 py-3 text-xs font-mono uppercase text-white tracking-widest hover:bg-orange-700 transition-all disabled:opacity-50">
+            {loading ? "Calculating..." : "Find Slots"}
+          </button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-mono text-neutral-400 mb-2">Available Configurations</h2>
+          <div className="space-y-2">
+            {availableSpaces.map(space => (
+              <div key={space.id} onClick={() => setSelectedSpace(space)} className={`p-4 border cursor-pointer transition-all ${selectedSpace?.id === space.id ? 'border-orange-600 bg-neutral-900' : 'border-neutral-900 bg-neutral-950 hover:border-neutral-800'}`}>
+                <div className="flex justify-between font-serif text-neutral-200">
+                  <span>{space.name}</span>
+                  <span>${space.pricePerHour}/hr</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button onClick={() => setStep(1)} className="flex-1 py-3 border border-neutral-800 text-xs font-mono uppercase">Back</button>
+            <button disabled={!selectedSpace} onClick={fetchMenu} className="flex-1 bg-orange-600 py-3 text-xs font-mono uppercase text-white tracking-widest disabled:opacity-50">Continue</button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-mono text-neutral-400 mb-2">Configure Preorder Menu Profile</h2>
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+            {menuItems.map(item => {
+              const qty = cart[item.id] || 0;
+              return (
+                <div key={item.id} className="flex justify-between items-center p-3 border border-neutral-900 bg-neutral-950">
+                  <div>
+                    <span className="font-serif block text-neutral-200">{item.name}</span>
+                    <span className="font-mono text-xs text-neutral-500">${item.price}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => handleCartChange(item.id, -1)} className="w-8 h-8 border border-neutral-800 flex items-center justify-center font-mono hover:bg-neutral-900">-</button>
+                    <span className="font-mono text-neutral-200">{qty}</span>
+                    <button onClick={() => handleCartChange(item.id, 1)} className="w-8 h-8 border border-neutral-800 flex items-center justify-center font-mono hover:bg-neutral-900">+</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button onClick={() => setStep(2)} className="flex-1 py-3 border border-neutral-800 text-xs font-mono uppercase">Back</button>
+            <button onClick={() => setIsCheckoutOpen(true)} className="flex-1 bg-green-600 hover:bg-green-700 py-3 text-xs font-mono uppercase text-white tracking-widest font-semibold">Verify & Pay</button>
+          </div>
+        </div>
+      )}
+
+      <CheckoutModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        amount={150}
+        onSuccess={() => {
+          setIsCheckoutOpen(false);
+          setSuccess(true);
+        }}
+        reservationDetails={getReservationDetails()}
+      />
+    </div>
+  );
+}

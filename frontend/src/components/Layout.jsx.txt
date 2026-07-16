@@ -1,0 +1,117 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, Outlet } from 'react-router-dom';
+
+export default function Layout() {
+  const location = useLocation();
+  const [kitchenTimer, setKitchenTimer] = useState("00:00:00");
+  const [nextWindow, setNextWindow] = useState("00:00");
+  const [seatingCapacity, setSeatingCapacity] = useState(8);
+  const [inQueue, setInQueue] = useState(3);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date();
+      const nextHour = new Date(now);
+      nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+      
+      const nextHourStr = nextHour.toTimeString().slice(0, 5);
+      setNextWindow(nextHourStr);
+
+      const diffMs = nextHour - now;
+      const hours = String(Math.floor((diffMs / (1000 * 60 * 60)) % 24)).padStart(2, '0');
+      const minutes = String(Math.floor((diffMs / (1000 * 60)) % 60)).padStart(2, '0');
+      const seconds = String(Math.floor((diffMs / 1000) % 60)).padStart(2, '0');
+      
+      setKitchenTimer(`${hours}:${minutes}:${seconds}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const liveSim = setInterval(() => {
+      setInQueue(prev => Math.max(0, prev + (Math.random() > 0.5 ? 1 : -1)));
+    }, 12000);
+    return () => clearInterval(liveSim);
+  }, []);
+
+  const navItems = [
+    { id: '01', name: 'Threshold', path: '/' },
+    { id: '02', name: 'Ledger', path: '/ledger' },
+    { id: '03', name: 'Queue', path: '/queue' },
+  ];
+
+  return (
+    <div className="flex min-h-screen bg-[#0C0C0E] text-neutral-200 font-sans selection:bg-orange-600 selection:text-white">
+      <aside className="w-80 border-r border-neutral-900 bg-[#0E0E10] flex flex-col justify-between p-8 shrink-0">
+        <div className="space-y-12">
+          <div>
+            <h1 className="font-serif text-3xl tracking-tight text-neutral-100">Sequential</h1>
+            <p className="font-serif italic text-orange-600 text-lg -mt-1">Table</p>
+            <div className="flex items-center gap-2 mt-4 text-xs font-mono tracking-widest text-neutral-500 uppercase">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              System Live
+            </div>
+          </div>
+
+          <div className="space-y-6 font-mono">
+            <div>
+              <div className="text-[10px] tracking-widest text-neutral-600 uppercase mb-1">Kitchen Timer</div>
+              <div className="text-3xl text-neutral-100 font-semibold tracking-tight tabular-nums">
+                {kitchenTimer}
+              </div>
+            </div>
+
+            <div className="border-t border-neutral-900 pt-4">
+              <div className="flex justify-between text-[10px] tracking-widest text-neutral-600 uppercase mb-1">
+                <span>Seating Capacity</span>
+                <span className="text-neutral-300">{seatingCapacity}%</span>
+              </div>
+              <div className="w-full bg-neutral-900 h-[2px]">
+                <div className="bg-orange-600 h-full transition-all duration-1000" style={{ width: `${seatingCapacity}%` }}></div>
+              </div>
+            </div>
+
+            <div className="flex justify-between border-t border-neutral-900 pt-4 text-xs">
+              <span className="text-neutral-600 uppercase tracking-widest text-[10px]">In Queue</span>
+              <span className="font-semibold text-neutral-200 tabular-nums">{inQueue}</span>
+            </div>
+
+            <div className="flex justify-between border-t border-neutral-900 pt-4 text-xs">
+              <span className="text-neutral-600 uppercase tracking-widest text-[10px]">Next Window</span>
+              <span className="font-semibold text-cyan-500 tabular-nums">{nextWindow}</span>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex flex-col gap-2 mt-12 font-serif text-lg">
+          {navItems.map(item => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.id}
+                to={item.path}
+                className={`group flex items-baseline gap-4 py-3 px-4 transition-all duration-300 ${
+                  isActive 
+                    ? 'bg-neutral-900/50 border-l-2 border-orange-600 text-neutral-100' 
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                <span className="text-xs font-mono text-orange-600/70 group-hover:text-orange-600">
+                  {item.id}
+                </span>
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <main className="flex-1 flex flex-col relative bg-[#0C0C0E]">
+        <Outlet />
+      </main>
+    </div>
+  );
+}

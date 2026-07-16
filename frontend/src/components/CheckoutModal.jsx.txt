@@ -1,0 +1,111 @@
+import React, { useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe('pk_test_replace_with_your_actual_publishable_key');
+
+function PaymentForm({ amount, onSuccess, onClose, reservationDetails }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState(null);
+  const [processing, setProcessing] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/reservations/payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amount * 100, reservationDetails }),
+      });
+      const { clientSecret } = await res.json();
+
+      const payload = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement),
+        },
+      });
+
+      if (payload.error) {
+        setError(`Payment failed: ${payload.error.message}`);
+      } else {
+        onSuccess(payload.paymentIntent);
+      }
+    } catch (err) {
+      setError("Unable to initialize payment channel.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="bg-neutral-900 border border-neutral-800 p-4">
+        <label className="block text-[10px] font-mono tracking-widest text-neutral-500 uppercase mb-3">
+          Secure Queue Deposit (Card Credentials)
+        </label>
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#F4F4F5',
+                fontFamily: 'monospace',
+                '::placeholder': { color: '#52525B' },
+              },
+              invalid: { color: '#EF4444' },
+            },
+          }}
+        />
+      </div>
+
+      {error && <div className="text-red-500 font-mono text-xs">{error}</div>}
+
+      <div className="flex gap-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 py-3 border border-neutral-800 hover:border-neutral-700 text-xs font-mono uppercase tracking-wider transition-all"
+        >
+          Abort
+        </button>
+        <button
+          type="submit"
+          disabled={!stripe || processing}
+          className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white text-xs font-mono uppercase tracking-wider transition-all disabled:opacity-50"
+        >
+          {processing ? "Securing Seat..." : `Authorize $${amount}.00`}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function CheckoutModal({ isOpen, onClose, amount, onSuccess, reservationDetails }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-[#0E0E10] border border-neutral-800 w-full max-w-md p-8 relative">
+        <h3 className="font-serif text-2xl text-neutral-100 mb-2">Sequential Ledger Authorization</h3>
+        <p className="text-sm text-neutral-400 font-mono mb-6">
+          To finalize your sequence registration, a temporary holding charge is required.
+        </p>
+
+        <Elements stripe={stripePromise}>
+          <PaymentForm 
+            amount={amount} 
+            onSuccess={onSuccess} 
+            onClose={onClose} 
+            reservationDetails={reservationDetails} 
+          />
+        </Elements>
+      </div>
+    </div>
+  );
+}
